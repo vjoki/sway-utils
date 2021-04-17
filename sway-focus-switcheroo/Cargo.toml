@@ -1,0 +1,10 @@
+[package]
+name = "sway-focus-switcheroo"
+version = "0.1.0"
+authors = ["vjoki"]
+edition = "2018"
+publish = false
+
+[dependencies]
+swayipc = "3.0.0-alpha.3"
+anyhow = "1"
