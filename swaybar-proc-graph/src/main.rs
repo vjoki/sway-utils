@@ -3,6 +3,8 @@ use std::io::{self, Write, BufRead, Seek};
 use std::collections::VecDeque;
 use anyhow::Result;
 use argh::FromArgs;
+#[cfg(feature = "nvidia")]
+use nvml_wrapper::Nvml;
 
 struct Measurement {
     free: i64,
@@ -196,21 +198,45 @@ impl BrailleGraph {
     }
 }
 
+#[derive(FromArgs)]
+#[argh(subcommand)]
 enum GraphType {
-    Cpu,
-    Memory,
+    Cpu(SubCommandCpu),
+    Memory(SubCommandMemory),
+    #[cfg(feature = "nvidia")]
+    NvGpu(SubCommandNvGpu),
+    #[cfg(feature = "nvidia")]
+    NvVram(SubCommandNvVram),
 }
 
-impl str::FromStr for GraphType {
-    type Err = &'static str;
+/// CPU usage graph
+#[derive(FromArgs)]
+#[argh(subcommand, name = "cpu")]
+struct SubCommandCpu {}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.to_ascii_lowercase().as_ref() {
-            "cpu" => GraphType::Cpu,
-            "memory" => GraphType::Memory,
-            _ => return Err("unknown graph type")
-        })
-    }
+/// Memory usage graph
+#[derive(FromArgs)]
+#[argh(subcommand, name = "memory")]
+struct SubCommandMemory {}
+
+/// Nvidia GPU usage graph
+#[cfg(feature = "nvidia")]
+#[derive(FromArgs)]
+#[argh(subcommand, name = "nvgpu")]
+struct SubCommandNvGpu {
+    /// select GPU by index (starts from 0)
+    #[argh(option, default = "0")]
+    gpu_index: u32,
+}
+
+/// Nvidia GPU VRAM usage graph
+#[cfg(feature = "nvidia")]
+#[derive(FromArgs)]
+#[argh(subcommand, name = "nvvram")]
+struct SubCommandNvVram {
+    /// select GPU by index (starts from 0)
+    #[argh(option, default = "0")]
+    gpu_index: u32,
 }
 
 fn dur_from_str_secs(s: &str) -> Result<time::Duration, String> {
@@ -229,22 +255,57 @@ struct Args {
     #[argh(option, short = 'i', from_str_fn(dur_from_str_secs))]
     interval: time::Duration,
     /// graph type
-    #[argh(option, short = 't')]
+    #[argh(subcommand)]
     graph_type: GraphType,
 }
+
 
 fn main() -> Result<()> {
     let Args { graph_type, interval, len: graph_len } = argh::from_env();
 
-    let f = fs::File::open(match graph_type { GraphType::Memory => "/proc/meminfo", GraphType::Cpu => "/proc/stat" })?;
-    let mut reader = ProcReader::new(f);
-    let mut graph = BrailleGraph::new(graph_len);
-
     let stdout = io::stdout();
     let mut stdout_handle = stdout.lock();
+    let mut graph = BrailleGraph::new(graph_len);
 
     match graph_type {
-        GraphType::Memory => {
+        #[cfg(feature = "nvidia")]
+        GraphType::NvGpu(subargs) => {
+            let nvml = Nvml::init()?;
+            let device = nvml.device_by_index(subargs.gpu_index)?;
+
+            loop {
+                let pct = device.utilization_rates()
+                    .map(|util| util.gpu as f64)?;
+                graph.update(pct as i64);
+                writeln!(
+                    stdout_handle,
+                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU usage {:.2}%\"}}",
+                    pct, graph.graph(), pct, pad=graph_len
+                )?;
+                thread::sleep(interval);
+            }
+        },
+        #[cfg(feature = "nvidia")]
+        GraphType::NvVram(subargs) => {
+            let nvml = Nvml::init()?;
+            let device = nvml.device_by_index(subargs.gpu_index)?;
+
+            loop {
+                let pct = device.memory_info()
+                    .map(|mem| 100.0 * ((mem.total as f64 - mem.free as f64) / mem.total as f64))?;
+                graph.update(pct as i64);
+                writeln!(
+                    stdout_handle,
+                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU VRAM usage {:.2}%\"}}",
+                    pct, graph.graph(), pct, pad=graph_len
+                )?;
+                thread::sleep(interval);
+            }
+        },
+        GraphType::Memory(_) => {
+            let f = fs::File::open("/proc/meminfo")?;
+            let mut reader = ProcReader::new(f);
+
             loop {
                 reader.read_mem_to_curr()?;
 
@@ -262,7 +323,10 @@ fn main() -> Result<()> {
                 thread::sleep(interval);
             }
         },
-        GraphType::Cpu => {
+        GraphType::Cpu(_) => {
+            let f = fs::File::open("/proc/stat")?;
+            let mut reader = ProcReader::new(f);
+
             reader.read_cpu_time_to_prev()?;
             thread::sleep(time::Duration::from_millis(100));
 
