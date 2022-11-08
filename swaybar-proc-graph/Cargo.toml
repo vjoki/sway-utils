@@ -8,4 +8,4 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-getopts = "0.2"
+argh = "0.1"

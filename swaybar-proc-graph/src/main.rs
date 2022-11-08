@@ -1,12 +1,8 @@
-use std::fs;
-use std::env;
-use std::thread;
-use std::time;
-use std::io;
-use std::io::{Write, BufRead, Seek};
+use std::{fs, str, time, thread};
+use std::io::{self, Write, BufRead, Seek};
 use std::collections::VecDeque;
 use anyhow::Result;
-use getopts::Options;
+use argh::FromArgs;
 
 struct Measurement {
     free: i64,
@@ -200,75 +196,96 @@ impl BrailleGraph {
     }
 }
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} FILE [options]", program);
-    print!("{}", opts.usage(&brief));
+enum GraphType {
+    Cpu,
+    Memory,
+}
+
+impl str::FromStr for GraphType {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_ascii_lowercase().as_ref() {
+            "cpu" => GraphType::Cpu,
+            "memory" => GraphType::Memory,
+            _ => return Err("unknown graph type")
+        })
+    }
+}
+
+fn dur_from_str_secs(s: &str) -> Result<time::Duration, String> {
+    s.parse()
+        .map(time::Duration::from_secs)
+        .map_err(|_| "value not a valid integer".to_owned())
+}
+
+#[derive(FromArgs)]
+/// Print out CPU or memory utilization graph in Waybar compatible JSON format.
+struct Args {
+    /// graph length in characters
+    #[argh(option)]
+    len: usize,
+    /// update interval in seconds
+    #[argh(option, short = 'i', from_str_fn(dur_from_str_secs))]
+    interval: time::Duration,
+    /// graph type
+    #[argh(option, short = 't')]
+    graph_type: GraphType,
 }
 
 fn main() -> Result<()> {
-    let mut opts = Options::new();
-    opts.optflag("m", "memory", "graph memory used");
-    opts.optopt("i", "interval", "update interval in seconds", "INTERVAL_SECS");
-    opts.optopt("n", "graph_len", "graph length in characters", "LENGTH");
-    opts.optflag("h", "help", "print help");
+    let Args { graph_type, interval, len: graph_len } = argh::from_env();
 
-    let matches = opts.parse(env::args().skip(1))?;
-    if matches.opt_present("h") {
-        print_usage(env::args().collect::<String>().as_str(), opts);
-        return Ok(());
-    }
-
-    let graph_memory = matches.opt_present("memory");
-    let interval = time::Duration::from_secs(matches.opt_get_default::<u64>("interval", 1)?);
-    let graph_len = matches.opt_get_default::<usize>("graph_len", 10)?;
-
-    let f = fs::File::open(if graph_memory { "/proc/meminfo" } else { "/proc/stat" })?;
+    let f = fs::File::open(match graph_type { GraphType::Memory => "/proc/meminfo", GraphType::Cpu => "/proc/stat" })?;
     let mut reader = ProcReader::new(f);
     let mut graph = BrailleGraph::new(graph_len);
 
     let stdout = io::stdout();
     let mut stdout_handle = stdout.lock();
 
-    if graph_memory {
-        loop {
-            reader.read_mem_to_curr()?;
+    match graph_type {
+        GraphType::Memory => {
+            loop {
+                reader.read_mem_to_curr()?;
 
-            let curr = reader.curr();
-            let pct = 100.0 * ((curr.total as f64 - curr.free as f64) / curr.total as f64);
+                let curr = reader.curr();
+                let pct = 100.0 * ((curr.total as f64 - curr.free as f64) / curr.total as f64);
 
-            graph.update(pct as i64);
+                graph.update(pct as i64);
 
-            // Simply exit if unable to write to stdout.
-            if writeln!(stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"Memory usage {:.2}%\"}}",
-                        pct, graph.graph(), pct, pad=graph_len).is_err() {
-                return Ok(());
+                // Simply exit if unable to write to stdout.
+                if writeln!(stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"Memory usage {:.2}%\"}}",
+                            pct, graph.graph(), pct, pad=graph_len).is_err() {
+                    return Ok(());
+                }
+
+                thread::sleep(interval);
             }
+        },
+        GraphType::Cpu => {
+            reader.read_cpu_time_to_prev()?;
+            thread::sleep(time::Duration::from_millis(100));
 
-            thread::sleep(interval);
-        }
-    } else {
-        reader.read_cpu_time_to_prev()?;
-        thread::sleep(time::Duration::from_millis(100));
+            loop {
+                reader.read_cpu_time_to_curr()?;
 
-        loop {
-            reader.read_cpu_time_to_curr()?;
+                let curr = reader.curr();
+                let prev = reader.prev();
+                let di = curr.free - prev.free;
+                let dt = curr.total - prev.total;
+                let pct = 100.0 * (1.0 - di as f64 / dt as f64);
 
-            let curr = reader.curr();
-            let prev = reader.prev();
-            let di = curr.free - prev.free;
-            let dt = curr.total - prev.total;
-            let pct = 100.0 * (1.0 - di as f64 / dt as f64);
+                graph.update(pct as i64);
 
-            graph.update(pct as i64);
+                // Simply exit if unable to write to stdout.
+                if writeln!(stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"CPU usage {:.2}%\"}}",
+                            pct, graph.graph(), pct, pad=graph_len).is_err() {
+                    return Ok(());
+                }
 
-            // Simply exit if unable to write to stdout.
-            if writeln!(stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"CPU usage {:.2}%\"}}",
-                        pct, graph.graph(), pct, pad=graph_len).is_err() {
-                return Ok(());
+                reader.store_curr_to_prev();
+                thread::sleep(interval);
             }
-
-            reader.store_curr_to_prev();
-            thread::sleep(interval);
         }
     }
 }
