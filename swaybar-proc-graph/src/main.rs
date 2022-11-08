@@ -1,4 +1,4 @@
-use std::{fs, str, time, thread};
+use std::{fs, str, time, thread, fmt};
 use std::io::{self, Write, BufRead, Seek};
 use std::collections::VecDeque;
 use anyhow::Result;
@@ -116,7 +116,6 @@ impl ProcReader {
 }
 
 struct BrailleGraph {
-    output: String,
     data: VecDeque<i64>,
     length: usize,
 }
@@ -124,14 +123,9 @@ struct BrailleGraph {
 impl BrailleGraph {
     pub fn new(length: usize) -> Self {
         Self {
-            output: String::with_capacity(4 * length),
-            data: VecDeque::with_capacity(length),
+            data: VecDeque::from(vec![0; length]),
             length,
         }
-    }
-
-    pub fn graph(&self) -> &str {
-        &self.output
     }
 
     pub fn update(&mut self, pct: i64) {
@@ -139,8 +133,6 @@ impl BrailleGraph {
             self.data.pop_front();
         }
         self.data.push_back(pct);
-
-        self.refresh_graph();
     }
 
     fn pct_thresholds(i: i64) -> i64 {
@@ -156,10 +148,10 @@ impl BrailleGraph {
             0
         }
     }
+}
 
-    fn refresh_graph(&mut self) {
-        self.output.clear();
-
+impl fmt::Display for BrailleGraph {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut iter = self.data.iter().peekable();
         while iter.peek().is_some() {
             let next: i64 = **iter.peek().unwrap();
@@ -193,8 +185,9 @@ impl BrailleGraph {
                 (4, 4) => '\u{28FF}', // '⣿'
                 _ => unreachable!("WHOAHOA!")
             };
-            self.output.push(c);
+            write!(f, "{}", c)?;
         }
+        Ok(())
     }
 }
 
@@ -279,7 +272,7 @@ fn main() -> Result<()> {
                 writeln!(
                     stdout_handle,
                     "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU usage {:.2}%\"}}",
-                    pct, graph.graph(), pct, pad=graph_len
+                    pct, graph, pct, pad=graph_len
                 )?;
                 thread::sleep(interval);
             }
@@ -297,7 +290,7 @@ fn main() -> Result<()> {
                 write!(
                     stdout_handle,
                     "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU VRAM usage ",
-                    pct, graph.graph(), pad=graph_len
+                    pct, graph, pad=graph_len
                 )?;
                 // NVML MemoryInfo values are in bytes.
                 if curr.total as f64 / (1024_i32.pow(2) as f64) < 1024.0 {
@@ -330,7 +323,7 @@ fn main() -> Result<()> {
                 write!(
                     stdout_handle,
                     "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"Memory usage ",
-                    pct, graph.graph(), pad=graph_len
+                    pct, graph, pad=graph_len
                 )?;
                 // /proc/meminfo values are in KiBs.
                 if curr.total as f64 / 1024_f64 < 1024.0 {
@@ -368,7 +361,7 @@ fn main() -> Result<()> {
 
                 writeln!(
                     stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"CPU usage {:.2}%\"}}",
-                    pct, graph.graph(), pct, pad=graph_len
+                    pct, graph, pct, pad=graph_len
                 )?;
 
                 reader.store_curr_to_prev();
