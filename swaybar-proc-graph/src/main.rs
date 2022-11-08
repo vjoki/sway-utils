@@ -259,7 +259,6 @@ struct Args {
     graph_type: GraphType,
 }
 
-
 fn main() -> Result<()> {
     let Args { graph_type, interval, len: graph_len } = argh::from_env();
 
@@ -291,14 +290,28 @@ fn main() -> Result<()> {
             let device = nvml.device_by_index(subargs.gpu_index)?;
 
             loop {
-                let pct = device.memory_info()
-                    .map(|mem| 100.0 * ((mem.total as f64 - mem.free as f64) / mem.total as f64))?;
+                let curr = device.memory_info()?;
+                let pct = 100.0 * (curr.used as f64 / curr.total as f64);
                 graph.update(pct as i64);
-                writeln!(
+
+                write!(
                     stdout_handle,
-                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU VRAM usage {:.2}%\"}}",
-                    pct, graph.graph(), pct, pad=graph_len
+                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU VRAM usage ",
+                    pct, graph.graph(), pad=graph_len
                 )?;
+                // NVML MemoryInfo values are in bytes.
+                if curr.total as f64 / (1024_i32.pow(2) as f64) < 1024.0 {
+                    let div = 1024_i32.pow(2) as f64;
+                    write!(stdout_handle, "{:.1}/{:.1} MiB", curr.used as f64 / div, curr.total as f64 / div)
+                } else if curr.total as f64 / (1024_i32.pow(3) as f64) < 1024.0 {
+                    let div = 1024_i32.pow(3) as f64;
+                    write!(stdout_handle, "{:.1}/{:.1} GiB", curr.used as f64 / div, curr.total as f64 / div)
+                } else {
+                    let div = 1024_i64.pow(4) as f64;
+                    write!(stdout_handle, "{:.1}/{:.1} TiB", curr.used as f64 / div, curr.total as f64 / div)
+                }?;
+                writeln!(stdout_handle, " ({:.2}%)\"}}", pct)?;
+
                 thread::sleep(interval);
             }
         },
@@ -314,11 +327,23 @@ fn main() -> Result<()> {
 
                 graph.update(pct as i64);
 
-                // Simply exit if unable to write to stdout.
-                if writeln!(stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"Memory usage {:.2}%\"}}",
-                            pct, graph.graph(), pct, pad=graph_len).is_err() {
-                    return Ok(());
-                }
+                write!(
+                    stdout_handle,
+                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"Memory usage ",
+                    pct, graph.graph(), pad=graph_len
+                )?;
+                // /proc/meminfo values are in KiBs.
+                if curr.total as f64 / 1024_f64 < 1024.0 {
+                    let div = 1024_f64;
+                    write!(stdout_handle, "{:.1}/{:.1} MiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
+                } else if curr.total as f64 / (1024_i32.pow(2) as f64) < 1024.0 {
+                    let div = 1024_i32.pow(2) as f64;
+                    write!(stdout_handle, "{:.1}/{:.1} GiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
+                } else {
+                    let div = 1024_i32.pow(3) as f64;
+                    write!(stdout_handle, "{:.1}/{:.1} TiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
+                }?;
+                writeln!(stdout_handle, " ({:.2}%)\"}}", pct)?;
 
                 thread::sleep(interval);
             }
@@ -341,11 +366,10 @@ fn main() -> Result<()> {
 
                 graph.update(pct as i64);
 
-                // Simply exit if unable to write to stdout.
-                if writeln!(stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"CPU usage {:.2}%\"}}",
-                            pct, graph.graph(), pct, pad=graph_len).is_err() {
-                    return Ok(());
-                }
+                writeln!(
+                    stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"CPU usage {:.2}%\"}}",
+                    pct, graph.graph(), pct, pad=graph_len
+                )?;
 
                 reader.store_curr_to_prev();
                 thread::sleep(interval);
