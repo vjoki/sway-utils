@@ -246,13 +246,13 @@ fn dur_from_str_secs(s: &str) -> Result<time::Duration, String> {
 }
 
 #[derive(FromArgs)]
-/// Print out CPU or memory utilization graph in Waybar compatible JSON format.
+/// Print out CPU, memory, or Nvidia GPU usage graph in Waybar compatible JSON format.
 struct Args {
     /// graph length in characters
-    #[argh(option)]
+    #[argh(option, default = "10")]
     len: usize,
     /// update interval in seconds
-    #[argh(option, short = 'i', from_str_fn(dur_from_str_secs))]
+    #[argh(option, short = 'i', default = "time::Duration::from_secs(1)", from_str_fn(dur_from_str_secs))]
     interval: time::Duration,
     /// graph type
     #[argh(subcommand)]
