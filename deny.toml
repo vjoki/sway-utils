@@ -1,0 +1,9 @@
+[licenses]
+copyleft = "warn"
+allow-osi-fsf-free = "either"
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "allow"
