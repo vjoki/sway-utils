@@ -1,6 +1,6 @@
 [package]
 name = "swaybar-proc-graph"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["vjoki"]
 edition = "2021"
 license = "MIT"
@@ -10,7 +10,8 @@ publish = false
 anyhow = "1"
 argh = "0.1"
 nvml-wrapper = { version = "0.8", optional = true }
+once_cell = { version = "1.16", optional = true }
 
 [features]
 default = ["nvidia"]
-nvidia = ["dep:nvml-wrapper"]
+nvidia = ["dep:nvml-wrapper", "dep:once_cell"]
