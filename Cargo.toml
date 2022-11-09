@@ -6,7 +6,8 @@ members = [
 ]
 
 [profile.release]
-opt-level = 'z'
+opt-level = "s"
 lto = true
 codegen-units = 1
-panic = 'abort'
+panic = "abort"
+strip = true
