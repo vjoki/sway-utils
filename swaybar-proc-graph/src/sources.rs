@@ -51,24 +51,26 @@ mod nvml {
 
     pub struct NvmlVram {
         device: nvml_wrapper::Device<'static>,
-        pct: f64,
+        curr: Measurement,
     }
 
     impl NvmlVram {
         pub fn new(gpu_index: u32) -> Result<Self> {
             let device = NVML.device_by_index(gpu_index)?;
-            Ok(Self { device, pct: 0.0 })
+            Ok(Self { device, curr: Measurement::default() })
         }
     }
 
     impl StatTaker for NvmlVram {
         fn measurement(&self) -> Measurement {
-            Measurement { free: (100.0 - self.pct).round() as i64, total: 100 }
+            self.curr
         }
 
         fn measure(&mut self) -> Result<f64> {
-            self.pct = self.device.memory_info().map(|mem| 100.0 * (mem.used as f64 / mem.total as f64))?;
-            Ok(self.pct)
+            let mem = self.device.memory_info()?;
+            self.curr = Measurement { free: mem.free, total: mem.total };
+            let pct = 100.0 * (mem.used as f64 / mem.total as f64);
+            Ok(pct)
         }
     }
 }
