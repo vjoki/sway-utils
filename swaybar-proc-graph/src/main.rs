@@ -83,10 +83,10 @@ fn main() -> Result<()> {
 
             loop {
                 let pct = stat.measure()?;
-                graph.update(pct as i64);
+                graph.update(pct as u8);
                 writeln!(
                     stdout_handle,
-                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU usage {:.2}%\"}}",
+                    "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"GPU usage {:.0}%\"}}",
                     pct, graph, pct, pad=graph_len
                 )?;
                 thread::sleep(interval);
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
             loop {
                 let pct = stat.measure()?;
                 let curr = stat.measurement();
-                graph.update(pct as i64);
+                graph.update(pct as u8);
 
                 write!(
                     stdout_handle,
@@ -107,14 +107,14 @@ fn main() -> Result<()> {
                     pct, graph, pad=graph_len
                 )?;
                 // NVML MemoryInfo values are in bytes.
-                if curr.total as f64 / (1024_i32.pow(2) as f64) < 1024.0 {
-                    let div = 1024_i32.pow(2) as f64;
+                if curr.total as f64 / (1024_u32.pow(2) as f64) < 1024.0 {
+                    let div = 1024_u32.pow(2) as f64;
                     write!(stdout_handle, "{:.1}/{:.1} MiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
-                } else if curr.total as f64 / (1024_i32.pow(3) as f64) < 1024.0 {
-                    let div = 1024_i32.pow(3) as f64;
+                } else if curr.total as f64 / (1024_u32.pow(3) as f64) < 1024.0 {
+                    let div = 1024_u32.pow(3) as f64;
                     write!(stdout_handle, "{:.1}/{:.1} GiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
                 } else {
-                    let div = 1024_i64.pow(4) as f64;
+                    let div = 1024_u64.pow(4) as f64;
                     write!(stdout_handle, "{:.1}/{:.1} TiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
                 }?;
                 writeln!(stdout_handle, " ({:.2}%)\"}}", pct)?;
@@ -129,7 +129,7 @@ fn main() -> Result<()> {
             loop {
                 let pct = stat.measure()?;
                 let curr = stat.measurement();
-                graph.update(pct as i64);
+                graph.update(pct as u8);
 
                 write!(
                     stdout_handle,
@@ -140,11 +140,11 @@ fn main() -> Result<()> {
                 if curr.total as f64 / 1024_f64 < 1024.0 {
                     let div = 1024_f64;
                     write!(stdout_handle, "{:.1}/{:.1} MiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
-                } else if curr.total as f64 / (1024_i32.pow(2) as f64) < 1024.0 {
-                    let div = 1024_i32.pow(2) as f64;
+                } else if curr.total as f64 / (1024_u32.pow(2) as f64) < 1024.0 {
+                    let div = 1024_u32.pow(2) as f64;
                     write!(stdout_handle, "{:.1}/{:.1} GiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
                 } else {
-                    let div = 1024_i32.pow(3) as f64;
+                    let div = 1024_u32.pow(3) as f64;
                     write!(stdout_handle, "{:.1}/{:.1} TiB", (curr.total - curr.free) as f64 / div, curr.total as f64 / div)
                 }?;
                 writeln!(stdout_handle, " ({:.2}%)\"}}", pct)?;
@@ -158,7 +158,7 @@ fn main() -> Result<()> {
 
             loop {
                 let pct = stat.measure()?;
-                graph.update(pct as i64);
+                graph.update(pct as u8);
 
                 writeln!(
                     stdout_handle, "{{\"percentage\": {:.0}, \"text\": \"{:\u{2800}>pad$}\", \"tooltip\": \"CPU usage {:.2}%\"}}",

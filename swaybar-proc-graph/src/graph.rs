@@ -2,7 +2,7 @@ use std::fmt;
 use std::collections::VecDeque;
 
 pub struct BrailleGraph {
-    data: VecDeque<i64>,
+    data: VecDeque<u8>,
     length: usize,
 }
 
@@ -14,14 +14,14 @@ impl BrailleGraph {
         }
     }
 
-    pub fn update(&mut self, pct: i64) {
+    pub fn update(&mut self, pct: u8) {
         if self.data.len() >= self.length {
             self.data.pop_front();
         }
         self.data.push_back(pct);
     }
 
-    fn pct_thresholds(i: i64) -> i64 {
+    fn pct_thresholds(i: u8) -> u8 {
         if i > 80 {
             4
         } else if i > 60 {
@@ -40,8 +40,8 @@ impl fmt::Display for BrailleGraph {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut iter = self.data.iter().peekable();
         while iter.peek().is_some() {
-            let next: i64 = **iter.peek().unwrap();
-            let curr: i64 = *iter.next().unwrap();
+            let next = **iter.peek().unwrap();
+            let curr = *iter.next().unwrap();
 
             let c = match (BrailleGraph::pct_thresholds(next), BrailleGraph::pct_thresholds(curr)) {
                 (0, 0) => '\u{2800}', // '⠀'

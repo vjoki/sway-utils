@@ -4,8 +4,8 @@ use anyhow::Result;
 
 #[derive(Default, Copy, Clone)]
 pub struct Measurement {
-    pub free: i64,
-    pub total: i64,
+    pub free: u64,
+    pub total: u64,
 }
 
 pub trait StatTaker {
@@ -28,24 +28,24 @@ mod nvml {
 
     pub struct NvmlGpu {
         device: nvml_wrapper::Device<'static>,
-        pct: f64,
+        pct: u32,
     }
 
     impl NvmlGpu {
         pub fn new(gpu_index: u32) -> Result<Self> {
             let device = NVML.device_by_index(gpu_index)?;
-            Ok(Self { device, pct: 0.0 })
+            Ok(Self { device, pct: 0 })
         }
     }
 
     impl StatTaker for NvmlGpu {
         fn measurement(&self) -> Measurement {
-            Measurement { free: (100.0 - self.pct).round() as i64, total: 100 }
+            Measurement { free: 100_u32.saturating_sub(self.pct) as u64, total: 100 }
         }
 
         fn measure(&mut self) -> Result<f64> {
-            self.pct = self.device.utilization_rates().map(|util| util.gpu as f64)?;
-            Ok(self.pct)
+            self.pct = self.device.utilization_rates().map(|util| util.gpu)?;
+            Ok(self.pct as f64)
         }
     }
 
@@ -104,10 +104,10 @@ impl ProcMeminfo {
             }
 
             if buf.starts_with("MemTotal") {
-                let val = buf.split_whitespace().nth(1).expect("value").parse::<i64>()?;
+                let val = buf.split_whitespace().nth(1).expect("value").parse::<u64>()?;
                 ct.total += val;
             } else if buf.starts_with("MemAvailable") {
-                let val = buf.split_whitespace().nth(1).expect("value").parse::<i64>()?;
+                let val = buf.split_whitespace().nth(1).expect("value").parse::<u64>()?;
                 ct.free += val;
 
                 // Assume MemAvailable comes after MemTotal...
@@ -175,7 +175,7 @@ impl ProcStat {
             }
 
             for (i, val) in buf.split_whitespace().skip(1).enumerate() {
-                let val = val.parse::<i64>()?;
+                let val = val.parse::<u64>()?;
                 ct.total += val;
 
                 // 4th element is the idle time.
