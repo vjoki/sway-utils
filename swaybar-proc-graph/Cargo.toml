@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 anyhow = "1"
 argh = "0.1"
-nvml-wrapper = { version = "0.9", optional = true }
+nvml-wrapper = { version = "0.10", optional = true }
 once_cell = { version = "1.16", optional = true }
 
 [features]

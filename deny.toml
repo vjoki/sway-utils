@@ -1,6 +1,11 @@
 [licenses]
-copyleft = "warn"
-allow-osi-fsf-free = "either"
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "Unicode-DFS-2016",
+    "ISC",
+]
 
 [licenses.private]
 ignore = false
