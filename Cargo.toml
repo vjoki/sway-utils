@@ -4,6 +4,7 @@ members = [
    "sway-focus-switcheroo",
    "sway-window-nav",
    "swaybar-proc-graph",
+   "locale1-xkb-config-rs",
 ]
 
 [profile.release]

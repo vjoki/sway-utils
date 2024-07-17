@@ -1,0 +1,16 @@
+[package]
+name = "locale1-xkb-config-rs"
+version = "0.1.0"
+authors = ["vjoki"]
+edition = "2021"
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow = "1"
+argh = "0.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+zbus = "4.3.1"
+zbus_macros = "4.3.1"
+swayipc = "3"
